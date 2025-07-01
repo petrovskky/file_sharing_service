@@ -22,6 +22,8 @@ from ...services.file_service import (
     save_metadata,
     upload_file_to_s3,
 )
+from ...services.virustotal_service import check_hash_virustotal
+import asyncio
 
 router = APIRouter()
 logger = logging.getLogger("file_service")
@@ -48,26 +50,48 @@ async def upload_file(
         f"content_type={file.content_type}"
     )
 
+    # --- Chunked MIME detection and hashing ---
+    import hashlib
+    hash_sha256 = hashlib.sha256()
+    mime_check_size = settings.mime_check_size
+    chunk_size = 8192
+    total_size = 0
+    mime_check_bytes = b""
     file.file.seek(0)
-    mime_check_bytes = file.file.read(settings.mime_check_size)
+    while True:
+        chunk = file.file.read(chunk_size)
+        if not chunk:
+            break
+        if len(mime_check_bytes) < mime_check_size:
+            needed = mime_check_size - len(mime_check_bytes)
+            mime_check_bytes += chunk[:needed]
+        hash_sha256.update(chunk)
+        total_size += len(chunk)
+        if total_size > settings.max_file_size:
+            logger.warning(
+                f"File too large: {file.filename} ({total_size} bytes)"
+            )
+            raise HTTPException(
+                status_code=413,
+                detail="File too large"
+            )
     file.file.seek(0)
     detected_mime = magic.from_buffer(mime_check_bytes, mime=True)
     if detected_mime not in settings.allowed_mime_types:
         logger.warning(f"Invalid MIME type: {detected_mime} for file {file.filename}")
         raise HTTPException(status_code=400, detail=f"Invalid file type: {detected_mime}")
-
-    file.file.seek(0, 2)
-    file_size = file.file.tell()
+    
+    # --- VirusTotal check with hash ---
+    sha256_hex = hash_sha256.hexdigest()
+    is_malicious = await check_hash_virustotal(sha256_hex)
+    if is_malicious:
+        logger.warning(f"File flagged as malicious by VirusTotal: {file.filename}")
+        raise HTTPException(status_code=400, detail="File flagged as malicious. Upload denied.")
+    
+    # --- Upload to S3 ---
     file.file.seek(0)
-    if file_size > settings.max_file_size:
-        logger.warning(
-            f"File too large: {file.filename} ({file_size} bytes)"
-        )
-        raise HTTPException(
-            status_code=413,
-            detail="File too large"
-        )
 
+    logger.info(f"File {file.filename} is normal, starting upload...")
     s3_key = None
     try:
         s3_key, uploaded_size = await upload_file_to_s3(
@@ -76,12 +100,12 @@ async def upload_file(
             file
         )
 
-        if uploaded_size != file_size:
-            logger.error(f"Size mismatch: expected {file_size}, got {uploaded_size}")
+        if uploaded_size != total_size:
+            logger.error(f"Size mismatch: expected {total_size}, got {uploaded_size}")
             raise HTTPException(status_code=500, detail="File size mismatch during upload")
         
         expiration = datetime.now() + timedelta(days=1)
-        save_metadata(s3_key, file.filename, file_size, expiration)
+        save_metadata(s3_key, file.filename, total_size, expiration)
         logger.info(f"File uploaded and metadata saved: {s3_key}")
     except Exception as e:
         logger.error(f"Upload failed: {e}")

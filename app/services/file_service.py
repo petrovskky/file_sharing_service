@@ -40,11 +40,6 @@ async def upload_file_to_s3(
                     break
                 file_size += len(chunk)
 
-                print('='*100, chunk, isinstance(chunk, str))
-
-                if isinstance(chunk, str):
-                    chunk = chunk.encode('utf-8')
-
                 part = await s3_client.upload_part(
                     Bucket=settings.s3_bucket_name,
                     Key=unique_filename,
