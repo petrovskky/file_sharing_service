@@ -9,3 +9,5 @@ venv/
 .env
 
 *.csv
+
+docker-compose.yml
