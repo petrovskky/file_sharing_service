@@ -44,3 +44,7 @@ This project is a secure and efficient file-sharing platform that allows users t
 
 3. **Automatic Deletion**:  
    - Files are automatically deleted from S3 after 24 hours.
+
+## Video Presentation
+
+[https://youtu.be/C27zpR-ODRI](https://youtu.be/C27zpR-ODRI)
