@@ -27,7 +27,11 @@ This project is a secure and efficient file-sharing platform that allows users t
 - **Cloudflare**: Protection against DDoS attacks and ensuring data integrity.  
 
 ### CI/CD  
-- **AWS CodePipeline**: Automation of build, test, and deployment processes.  
+- **AWS CodePipeline**: Automation of build, test, and deployment processes.
+
+## Diagram
+
+![Diagram](diagram.png)
 
 ## Usage  
 1. **Uploading Files**:  
