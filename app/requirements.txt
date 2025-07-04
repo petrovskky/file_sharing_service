@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+aioboto3
+pydantic-settings
+psycopg2-binary
+python-magic
+python-multipart
+httpx

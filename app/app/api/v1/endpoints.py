@@ -1,6 +1,7 @@
 import magic
 import logging
 from datetime import datetime, timedelta
+import hashlib
 
 import aioboto3
 from fastapi import (
@@ -10,6 +11,7 @@ from fastapi import (
     HTTPException,
     UploadFile,
     status,
+    Request,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
 
@@ -50,8 +52,6 @@ async def upload_file(
         f"content_type={file.content_type}"
     )
 
-    # --- Chunked MIME detection and hashing ---
-    import hashlib
     hash_sha256 = hashlib.sha256()
     mime_check_size = settings.mime_check_size
     chunk_size = 8192
@@ -81,14 +81,12 @@ async def upload_file(
         logger.warning(f"Invalid MIME type: {detected_mime} for file {file.filename}")
         raise HTTPException(status_code=400, detail=f"Invalid file type: {detected_mime}")
     
-    # --- VirusTotal check with hash ---
     sha256_hex = hash_sha256.hexdigest()
     is_malicious = await check_hash_virustotal(sha256_hex)
     if is_malicious:
         logger.warning(f"File flagged as malicious by VirusTotal: {file.filename}")
         raise HTTPException(status_code=400, detail="File flagged as malicious. Upload denied.")
     
-    # --- Upload to S3 ---
     file.file.seek(0)
 
     logger.info(f"File {file.filename} is normal, starting upload...")
